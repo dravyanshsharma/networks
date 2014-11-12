@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>CSL374 Fall 2011: Assignment on bandwidth probing</title>
+</head>
+<body>
+<h1>CSL374 Fall 2011: Assignment on bandwidth probing</h1>
+
+In this assignment, we will create some bandwidth probing tools for the GPRS/EDGE data connections on our Blackberry and Nokia mobile phones. We will run two classes of tests, based on whether or not we have access to another endpoint on the Internet to which we want to measure different performance metrics.
+
+<h2>Set 1: Third-party servers</h2>
+
+<ol>
+
+<li><b>End-to-end latency</b>: You know that this can be measured by a simple ping test, but since the Blackberry phones do not allow programming of raw IP packets, we will use what's informally known as an <i>HTTP ping</i>. Just like a GET method, HTTP also has a HEAD method to which the server sends an empty reply. You should write an HTTP client that makes a number of HEAD requests for <a href="http://www.cse.iitd.ernet.in/~aseth/assg/bwtests/great.txt">this file</a> and reports back the average latency (and standard deviation) in getting a reply. Do this with persistent and non-persistent HTTP connections. Do you notice a difference? Why? Why do we use a HEAD request and not a regular GET or POST request here?<br><br>
+</li>
+
+<li><b>TCP download rate</b>: This should be simple -- just download a file multiple times and report the average download rate. But is it really that simple? Write an HTTP client that uses the GET method to download a 2KB file multiple times from <a href="http://www.cse.iitd.ernet.in/~aseth/assg/bwtests/great.txt">here</a>, and gives the average download rate, and the standard deviation. Now trying doing the same experiment for a <a href="http://www.cse.iitd.ernet.in/~aseth/assg/bwtests/paper-reading.pdf">larger file</a> of 70KB. Is there a difference? Why? Try the same experiment with a <a href="http://www.cse.iitd.ernet.in/~aseth/assg/bwtests/giving-talks.pdf">5MB file</a> as well.<br><br>
+</li>
+
+<li><b>Heatmaps</b>: Modify your HTTP clients for latency and download rates to also log the GPS location at which the measurement was conducted. Then plot a heatmap of the bandwidths recorded at different locations on the campus -- this will reveal spots of good and bad data coverage. You can use the <a href="http://www.heatmapapi.com/">heatmap API</a> with Google Maps for this -- take a look at this <a href="http://csl374.gramvaani.org/374heatmap.html">code sample</a> to get started. Note that each project group will have to create their own heatmap, which means getting your own Google Maps API key, your own heatmap API key, etc. And it's all free!<br><br>
+</li>
+
+</ol>
+
+
+<h2>Set 2: Custom services on the servers</h2>
+
+We have written a UDP server that can be used to bounce back packets, something like PING but more flexible. Clients can send UDP messages of varying lengths, and the server reports back with a timestamp of when it received each packet. Clients can also request for responses of different lengths. This can be used to create some very interesting bandwidth tests, but before we go there, let us study the protocol we have implemented.<br><br>
+
+<b>Packet format</b>: Clients can send two types of UDP messages -- ECHO and STAT. ECHO messages are like PINGs, tagged with a unique (identifier, sequence number) tuple for each packet, and request the server to reply back with a packet of a desired length.<br><br>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Method: ECHO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Id: 12345678<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seqno: 2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Length: 1024<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Padding, pad-character = SPACE<br><br>
+
+This notifies the server that the ECHO message is part of a train of packets (described later) with an identifier 12345678, a sequence number of 2 within the train, and that the server should reply back with a packet of length 1024. If you indicate a length of 0, then the server will not generate a reply at all. The ECHO message can also be padded with SPACE characters, to create large request packets with a maximum size of 10KB. Thus, you can effectively throttle the uplink by sending large ECHO messages, but not request for a reply. Similarly, you can throttle the downlink by sending small ECHO messages and request for large ECHO replies. For formatting purposes, note that each header line is terminated with a NEWLINE. The reply of the server to these ECHO messages is similar:<br><br>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Method: ECHO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Id: 12345678<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seqno: 2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Time: 172583863532899<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Padding, pad-character = SPACE<br><br>
+
+The reply contains a timestamp (in milliseconds) of when the server received the message, and details of the identifier and sequence number of the ECHO request. If the requested packet length is greater than the space taken up by the different headers, the server pads the extra bytes with SPACE characters. Note that UDP is an unrealiable protocol, so it is possible that you may not get replies to certain requests, either because the request was lost or the reply was lost. Note also that the identifier, sequence number, and timestamp are all of the long type.<br><br>
+
+We next describe the STAT message. This becomes relevant if a bunch of ECHO packets are sent as part of the same packet train, ie. ECHO messages with the same identifier but different sequence numbers. The server replies back with a cumulative statistic of when each message was received. The STAT request looks like this:<br><br>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Method: STAT<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Id: 12345678<br><br>
+
+The STAT response will contain the following:<br><br>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Method: STAT<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Id: 12345678<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RESP: 1, 172583863532896<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RESP: 2, 172583863532899<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RESP: 3, 172583863532902<br><br>
+
+Each RESP line here indicates the timestamp at which a particular sequence number was received. You can create packet trains of up to 24 ECHO packets, and then use the STAT request to get back timestamps of all the requests. This is especially relevant if you turn off replies from the server for a few messages in your packet train. Note that it is possible that the reply could contain messages in a different order than how you would have dispatched the requests. Why? <br><br>
+
+<b>Running the tests</b>: The server and sample client packages can be downloaded <a href="http://www.cse.iitd.ernet.in/~aseth/assg/bwtests/udptests.zip">here</a>. You can start the server as: <i>bash runserver.sh [port number]</i>, where [port number] indicates the port number at which you want to run the server, the default being 9010.<br><br>
+
+A sample client program is also given that can be executed as <i>bash runclient.sh</i>. By default this connects to a server running locally on port 9010.<br><br>
+
+For the actual assignment, the server will run at IP address 124.124.247.5, port 9010. You will then have to write UDP clients on your Blackberry and Nokia devices to run the different tests described next.<br><br>
+
+<ol>
+
+<li><b>Packet pair tests for available uplink bandwidth</b>: This is a cool trick that is used to measure the available bandwidth on a bottleneck link, if you know the capacity of the link. A pair of small ECHO packets are sent with a known time spacing between them, eg. a pair is sent back to back, then another pair is sent with a 10ms spacing, then another pair with a 100ms spacing, etc. If there is a bottleneck link along the path, the spacing between the packets is likely to increase as a function of the amount of cross-traffic on that link. When this pair hits the server, the difference in times of the pair of packets gives an indication of the amount of traffic on the link. Thus, if the pair was sent with a spacing of S ms, arrived at the server with a spacing of N ms, the capacity of the link is C, and the ECHO packets are assumed to be tiny enough to not influence the measurements, then the utilization can be calculated as (N - S)/S * C, and equivalently the available bandwidth becomes (1 - (N - S)/S)*C. Can you derive this? Some definitions here: <i>Capacity</i> indicates the maximum capacity of the link, and <i>Available bandwidth</i> indicates the unused bandwidth on the link.<br><br>
+
+There are a bunch of assumptions here, that there is only one bottleneck link, and that the capacity of the link is known. The bottleneck link assumption is most likely true in the GPRS/EDGE context, since the wireless link can be expected to be the bottleneck. And although we do not know the exact link capacity except for advertized rates, the packet train tests described next to measure available bandwidth do not require knowledge of the link capacity -- hence, a combination of these two tests can be used to even find the link capacity.<br><br>
+
+You should write a UDP ECHO/STAT client that sends packet pairs with different spacings between 1ms to 1000ms, and reports the available uplink bandwidth. Use Google to find the advertized GPRS/EDGE uplink capacity. Note that this method works only to probe the uplink. How would you probe the downlink? Would the available downlink bandwidth be the same as the TCP download rate reported in the first set of experiments?<br><br>
+</li>
+
+<li><b>Packet train tests for available uplink bandwidth</b>: A packet train is what it sounds like -- a series of packets sent one after the other to probe the network. A strategy that has been used by several researchers is as follows: send a small ECHO packet, followed by N large ECHO packets, and finally another small ECHO packet. The spacing between the ECHO packets at either end of the train will give an indication of the amount of time taken by the bottleneck link to serve the N large ECHO packets. This effectively reveals the service rate that was provided by the bottleneck link. By changing the number of packets in the train, the demand can be altered, but ultimately the link will hit its limit and either start dropping packets, or not exhibit any increase in the service rate. This point of saturation reveals the available bandwidth of the bottleneck link.<br><br>
+
+You should write a UDP ECHO/STAT client to use packet trains for probing the uplink. You can vary N from 1 to 32, and choose ECHO packet sizes of 0.5KB to 1KB with spacing between 5 to 100ms, to find the right parameters which yield good service rate curves. A very wide spacing, or too small packet sizes, will not congest the bottleneck link at the same time.<br><br>
+</li>
+
+<li><b>Bonus: Downlink tests</b>: If you really want to take it up, suggest modifications and alter the server to be able to run downlink bandwidth probing tests. We will later figure out how to run experiments based on your modifications.<br><br>
+</li>
+
+</ol>
+
+<h2>References</h2>
+
+<ol>
+
+<li><a href="http://linux.die.net/man/1/httping">httping</a></li>
+
+<li><a href="http://www.icir.org/models/tools.html">Tools for bandwidth measurement</a></li>
+
+<li>J. Strauss, D. Katabi, and F. Kaashoek, "A Measurement Study of Available Bandwidth Measurement Tools", IMC 2003</li>
+
+</ol>
+
+</body>
+</html>
