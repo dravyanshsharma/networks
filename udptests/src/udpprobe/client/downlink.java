@@ -211,6 +211,6 @@ class downlink {
 		clientSocket1.close();
 		clientSocket2.close();
 		for (int i = 0; i < 24; i++)
-			System.out.print(dropped[i] + ", ");
+			System.out.print(dropped[i] + " ");
 	}
 }
