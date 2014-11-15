@@ -9,7 +9,7 @@ import java.util.Arrays;
 import java.util.Random;
 
 class uplink {
-	final static int NUM_TRIALS = 20;
+	final static int NUM_TRIALS = 100;
 
 	public static void main(String args[]) throws IOException {
 		DatagramSocket clientSocket = new DatagramSocket();
