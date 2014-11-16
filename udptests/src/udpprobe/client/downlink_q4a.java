@@ -29,8 +29,8 @@ public class downlink_q4a {
 			else
 				clientSocket2.send(sendPacket);
 		}
-		boolean flag = false;
-		for (int i = 0; i < 24 && !flag; i++) {
+		boolean shared = false;
+		for (int i = 0; i < 24 && !shared; i++) {
 			DatagramPacket receivePacket = new DatagramPacket(receiveData,
 					receiveData.length);
 			try {
@@ -40,13 +40,13 @@ public class downlink_q4a {
 				int seq = Integer.parseInt(modifiedSentence.split("\n")[2]
 						.split(" ")[1]);
 				if (seq % 2 != 0) {
-					System.out.println("SHARED BUFFER FOUND\n");
-					flag = true;
+					System.out.println("SHARED DOWNLINK BUFFER FOUND\n");
+					shared = true;
 				}
 			} catch (SocketTimeoutException e) {
 			}
 		}
-		for (int i = 0; i < 24 && !flag; i++) {
+		for (int i = 0; i < 24 && !shared; i++) {
 			DatagramPacket receivePacket = new DatagramPacket(receiveData,
 					receiveData.length);
 			try {
@@ -56,14 +56,14 @@ public class downlink_q4a {
 				int seq = Integer.parseInt(modifiedSentence.split("\n")[2]
 						.split(" ")[1]);
 				if (seq % 2 == 0) {
-					System.out.println("SHARED BUFFER FOUND\n");
-					flag = true;
+					System.out.println("SHARED DOWNLINK BUFFER FOUND\n");
+					shared = true;
 				}
 			} catch (SocketTimeoutException e) {
 			}
 		}
-		if (!flag)
-			System.out.println("PER SOURCE BUFFER FOUND\n");
+		if (!shared)
+			System.out.println("PER SOURCE DOWNLINK BUFFER FOUND\n");
 		clientSocket1.close();
 		clientSocket2.close();
 

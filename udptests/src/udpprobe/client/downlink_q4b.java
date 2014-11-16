@@ -8,7 +8,7 @@ import java.net.SocketTimeoutException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
-
+//270 46 23 22 16 15 9 16 7 11 18 9 14 12 11 12 10 17 14 16 11 10 8 6
 public class downlink_q4b {
 	final static int NUM_TRIALS = 10000;
 
