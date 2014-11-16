@@ -111,7 +111,7 @@ class UDPClient {
 				bestarg = j;
 			}
 		}
-		System.out.println("barg = "+bestarg);
+		// System.out.println("barg = "+bestarg);
 		estimate[trial] = probe - bestarg*quantum;
 		if(bestarg==0)
 			count += 1;
