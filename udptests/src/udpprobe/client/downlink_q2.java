@@ -1,4 +1,4 @@
-	package udpprobe.client;
+package udpprobe.client;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
