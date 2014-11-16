@@ -1,0 +1,14 @@
+The files have been named to reflect the question number in [1] it responds to.
+To run a file called <filename>.java, add the following line in udptests/runclient.sh   ---
+
+java -cp "lib/java-getopt-1.0.13.jar:lib/commons-collections-3.2.1.jar:lib/log4j-1.2.16.jar:lib/expiringcache.jar:build" udpprobe.client.<filename>
+
+and execute the following from udptests/  ---
+
+bash runclient.sh
+
+
+
+
+REFERENCE(S):
+[1] http://www.cse.iitd.ernet.in/~cs1110214/3_measurements.pdf
