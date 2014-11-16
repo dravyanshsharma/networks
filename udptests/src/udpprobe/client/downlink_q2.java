@@ -7,91 +7,142 @@ import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 import java.util.Random;
 
-class downlink_q2 {
+class UDPClient {
 	final static int NUM_TRIALS = 20;
 
 	public static void main(String args[]) throws IOException {
 		DatagramSocket clientSocket1 = new DatagramSocket();
 		DatagramSocket clientSocket2 = new DatagramSocket();
 		double tput = 1.2*1024*1024;
-		int bufKB = 15;
+		int bufKB = 26;
 		int bsize = bufKB*1024*8;
-		double probe = bsize*1000/tput;
+		double probe = 2*bsize*1000/tput;
 		boolean flip=false;
-		clientSocket1.setSoTimeout((int)probe);
+		clientSocket1.setSoTimeout(1000);
+		int quantum = (int)(probe/200);
+		int base = (int)(probe/100)+quantum;
 		InetAddress IPAddress = InetAddress
 				.getByName("glenstorm.iitd.ernet.in");
 		byte[] receiveData = new byte[10240];
-		double[] bufdraintime = new double[NUM_TRIALS];
+		int c = 0;
+		for(int t = (int)probe; t>=base ; t -= quantum)
+			c++;
+		int[][] bufdraintime = new int[NUM_TRIALS][c];
+		double[] estimate = new double[NUM_TRIALS];
 		double sum = 0, min = Double.MAX_VALUE, max = Double.MIN_VALUE;
 		int count = 0;
 		for (int trial = 0; trial < NUM_TRIALS; trial++) {
-			for (int j = 5; j<=24 ; j++) {
+		for (int trial1 = 0; trial1 < NUM_TRIALS; trial1++) {
+			for (int t = (int)probe, jj=0; t>=base ; t -= quantum, jj++) {
+				//clientSocket1.setSoTimeout(t);
 				flip = false;
 				int id = new Random().nextInt(Integer.MAX_VALUE);
-				for (int i = 0; i < j; i++) {
+				for (int i = 0; i < bufKB; i++) {
 					String sentence = "Method: ECHO\nId: " + id + "\nSeqno: "
-							+ i + "\nLength: 5120";
+							+ i + "\nLength: 1024";
 					byte[] sendData = sentence.getBytes();
 					DatagramPacket sendPacket = new DatagramPacket(sendData,
 							sendData.length, IPAddress, 9010);
 					clientSocket1.send(sendPacket);
 				}
-				for (int i = 0; i < j; i++) {
+				try {
+    				// to sleep 10 seconds
+				    Thread.sleep(t);
+				} catch (InterruptedException e) {
+    				// recommended because catching InterruptedException clears interrupt flag
+    				Thread.currentThread().interrupt();
+    				// you probably want to quit if the thread is interrupted
+    				return;
+				}
+				for (int i = 0; i < bufKB; i++) {
+					String sentence = "Method: ECHO\nId: " + id + "\nSeqno: "
+							+ i + "\nLength: 1024";
+					byte[] sendData = sentence.getBytes();
+					DatagramPacket sendPacket = new DatagramPacket(sendData,
+							sendData.length, IPAddress, 9010);
+					clientSocket1.send(sendPacket);
+				}
+				int recv = 0;
+				for (int i = 0; i < 2*bufKB; i++) {
 					DatagramPacket receivePacket = new DatagramPacket(
 							receiveData, receiveData.length);
 					try {
 						clientSocket1.receive(receivePacket);
 					} catch (SocketTimeoutException e) {
+						flip = true;
+						recv = i+1;
+						break;
+					}
+				}
+
+					if(flip) // some packet lost
+					{
 						String sentence = "Method: STAT\nId: " + id;
 						byte[] sendData = sentence.getBytes();
 						DatagramPacket sendPacket = new DatagramPacket(
 								sendData, sendData.length, IPAddress, 9010);
 						clientSocket2.send(sendPacket);
-						receivePacket = new DatagramPacket(receiveData,
+						DatagramPacket receivePacket = new DatagramPacket(receiveData,
 								receiveData.length);
 						clientSocket2.receive(receivePacket);
 						String modifiedSentence = new String(
 								receivePacket.getData(), 0,
 								receivePacket.getLength());
 						String[] s = modifiedSentence.split("\n");
-						System.out.println("stat "+(s.length-2)+", recv "+i);
-						flip = true;
-						// if (s.length - 3 == j-1)
-						// 	continue out;
-						// else {
-							bufdraintime[trial] = ((int)probe)*((double)(s.length-3)*5)/1000;
-							count += 1;
-							sum += bufdraintime[trial];
-							if (min > bufdraintime[trial])
-								min = bufdraintime[trial];
-							if (max < bufdraintime[trial])
-								max = bufdraintime[trial];
-						//	break out;
-						// }
+						if(s.length-2!=recv)
+							bufdraintime[trial][jj] += 1;
+						//System.out.println("stat "+(s.length-2)+", recv "+i);
 					}
-						//break out;
-					if(flip)
-						break;
-				}
-
-					if(flip)
-						break;
 			}
+		}
+		double bestr = 0;
+		int bestarg = -1;
+		for(int j=1; j<c; j++)
+		{
+			double meanl = 0, meanr = 0;
+			for(int k=0; k<j; k++)
+				meanl += bufdraintime[trial][k];
+			for(int k=j; k<c; k++)
+				meanr += bufdraintime[trial][k];
+			double ratio = meanr*j/meanl/(c-j);
+			if(ratio>0 && ratio>bestr)
+			{
+				bestr = ratio;
+				bestarg = j;
+			}
+		}
+		System.out.println("barg = "+bestarg);
+		estimate[trial] = probe - bestarg*quantum;
+		if(bestarg==0)
+			count += 1;
+		sum += probe - bestarg*quantum;
+		if (min > probe - bestarg*quantum)
+			min = probe - bestarg*quantum;
+		if (max < probe - bestarg*quantum)
+			max = probe - bestarg*quantum;
 		}
 		clientSocket1.close();
 		clientSocket2.close();
-		double mean = ((double) sum) / count;
+		//System.out.println("count = "+count+"/"+NUM_TRIALS);
+		double mean = ((double) sum) / NUM_TRIALS;
 		double ss = 0;
 		for (int i = 0; i < NUM_TRIALS; i++)
-			if(bufdraintime[i]>0)
-				ss += (bufdraintime[i] - mean) * (bufdraintime[i] - mean);
-		double std = Math.sqrt(ss / count);
+			ss += (estimate[i] - mean) * (estimate[i] - mean);
+		double std = Math.sqrt(ss / NUM_TRIALS);
 		System.out.println("BUFFER DRAIN TIME:\nAverage: " + mean + "\nMinimum: "
 				+ min + "\nMaximum: " + max + "\nStandard Deviation: " + std
 				+ "\n");
+		for(int i=0; i<NUM_TRIALS; i++)
+		{
+			for(int j=0; j<c; j++)
+			{
+				System.out.print(""+bufdraintime[i][j]+" ");
+			}
+			System.out.println("");
+		}
 	}
 }
+
 
 /*
 BUFFER DRAIN TIME:
