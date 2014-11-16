@@ -9,8 +9,9 @@ import java.util.Arrays;
 import java.util.Random;
 
 public class uplink_q4a {
-	final static int ETA = 3;
+	final static int ETA = 2;
 	final static boolean datacollection = true;
+	final static int NUM_TRIALS = 30;
 
 	public static void main(String[] args) throws IOException {
 		InetAddress IPAddress = InetAddress
@@ -20,86 +21,89 @@ public class uplink_q4a {
 		DatagramSocket clientSocket2 = new DatagramSocket();
 		clientSocket1.setSoTimeout(1000);
 		clientSocket2.setSoTimeout(1000);
-		int id = new Random().nextInt(Integer.MAX_VALUE);
-		for (int i = 0; i < 24; i++) {
-			String sentence = "Method: ECHO\nId: " + id + "\nSeqno: " + i
-					+ "\nLength: 0";
+		boolean shared = false;
+		for (int t = 0; t < NUM_TRIALS & !shared; t++) {
+			int id = new Random().nextInt(Integer.MAX_VALUE);
+			for (int i = 0; i < 24; i++) {
+				String sentence = "Method: ECHO\nId: " + id + "\nSeqno: " + i
+						+ "\nLength: 0";
+				byte[] sendData = sentence.getBytes();
+				DatagramPacket sendPacket = new DatagramPacket(sendData,
+						sendData.length, IPAddress, 9010);
+				clientSocket1.send(sendPacket);
+			}
+			String sentence = "Method: STAT\nId: " + id;
 			byte[] sendData = sentence.getBytes();
 			DatagramPacket sendPacket = new DatagramPacket(sendData,
 					sendData.length, IPAddress, 9010);
-			clientSocket1.send(sendPacket);
-		}
-		String sentence = "Method: STAT\nId: " + id;
-		byte[] sendData = sentence.getBytes();
-		DatagramPacket sendPacket = new DatagramPacket(sendData,
-				sendData.length, IPAddress, 9010);
-		DatagramPacket receivePacket = new DatagramPacket(receiveData,
-				receiveData.length);
-		boolean flag;
-		do {
-			flag = false;
-			try {
+			DatagramPacket receivePacket = new DatagramPacket(receiveData,
+					receiveData.length);
+			boolean flag;
+			do {
+				flag = false;
+				try {
+					clientSocket1.send(sendPacket);
+					clientSocket1.receive(receivePacket);
+				} catch (SocketTimeoutException e) {
+					flag = true;
+				}
+			} while (flag);
+			String response = new String(receivePacket.getData(), 0,
+					receivePacket.getLength());
+			String[] s = response.split("\n");
+			double delta_unthrottled = (Double.parseDouble(s[s.length - 1]
+					.split(" ")[2]) - Double.parseDouble(s[3].split(" ")[2]))
+					/ (s.length - 2);
+			id = new Random().nextInt(Integer.MAX_VALUE);
+			int id1 = new Random().nextInt(Integer.MAX_VALUE);
+			for (int i = 0; i < 24; i++) {
+				sentence = "Method: ECHO\nId: " + id + "\nSeqno: " + i
+						+ "\nLength: 0";
+				final char[] s1 = new char[10240 - sentence.length()];
+				Arrays.fill(s1, ' ');
+				sentence = sentence + new String(s1);
+				sendData = sentence.getBytes();
+				sendPacket = new DatagramPacket(sendData, sendData.length,
+						IPAddress, 9010);
+				clientSocket2.send(sendPacket);
+				sentence = "Method: ECHO\nId: " + id1 + "\nSeqno: " + i
+						+ "\nLength: 0";
+				sendData = sentence.getBytes();
+				sendPacket = new DatagramPacket(sendData, sendData.length,
+						IPAddress, 9010);
 				clientSocket1.send(sendPacket);
-				clientSocket1.receive(receivePacket);
-			} catch (SocketTimeoutException e) {
-				flag = true;
 			}
-		} while (flag);
-		String response = new String(receivePacket.getData(), 0,
-				receivePacket.getLength());
-		String[] s = response.split("\n");
-		double delta_unthrottled = (Double.parseDouble(s[s.length - 1]
-				.split(" ")[2]) - Double.parseDouble(s[3].split(" ")[2]))
-				/ (s.length - 2);
-		id = new Random().nextInt(Integer.MAX_VALUE);
-		int id1 = new Random().nextInt(Integer.MAX_VALUE);
-		for (int i = 0; i < 24; i++) {
-			sentence = "Method: ECHO\nId: " + id + "\nSeqno: " + i
-					+ "\nLength: 0";
-			final char[] s1 = new char[10240 - sentence.length()];
-			Arrays.fill(s1, ' ');
-			sentence = sentence + new String(s1);
+			sentence = "Method: STAT\nId: " + id1;
 			sendData = sentence.getBytes();
 			sendPacket = new DatagramPacket(sendData, sendData.length,
 					IPAddress, 9010);
-			clientSocket2.send(sendPacket);
-			sentence = "Method: ECHO\nId: " + id1 + "\nSeqno: " + i
-					+ "\nLength: 0";
-			sendData = sentence.getBytes();
-			sendPacket = new DatagramPacket(sendData, sendData.length,
-					IPAddress, 9010);
-			clientSocket1.send(sendPacket);
-		}
-		sentence = "Method: STAT\nId: " + id1;
-		sendData = sentence.getBytes();
-		sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress,
-				9010);
-		receivePacket = new DatagramPacket(receiveData, receiveData.length);
-		do {
-			flag = false;
-			try {
-				clientSocket1.send(sendPacket);
-				clientSocket1.receive(receivePacket);
-			} catch (SocketTimeoutException e) {
-				flag = true;
+			receivePacket = new DatagramPacket(receiveData, receiveData.length);
+			do {
+				flag = false;
+				try {
+					clientSocket1.send(sendPacket);
+					clientSocket1.receive(receivePacket);
+				} catch (SocketTimeoutException e) {
+					flag = true;
+				}
+			} while (flag);
+			response = new String(receivePacket.getData(), 0,
+					receivePacket.getLength());
+			s = response.split("\n");
+			double delta_throttled = (Double.parseDouble(s[s.length - 1]
+					.split(" ")[2]) - Double.parseDouble(s[3].split(" ")[2]))
+					/ (s.length - 2);
+			if (datacollection) {
+				System.out.println(delta_throttled);
+				System.out.println(delta_unthrottled);
 			}
-		} while (flag);
-		response = new String(receivePacket.getData(), 0,
-				receivePacket.getLength());
-		s = response.split("\n");
-		double delta_throttled = (Double
-				.parseDouble(s[s.length - 1].split(" ")[2]) - Double
-				.parseDouble(s[3].split(" ")[2]))
-				/ (s.length - 2);
-		if (datacollection) {
-			System.out.println(delta_throttled);
-			System.out.println(delta_unthrottled);
+			if (delta_throttled > ETA * delta_unthrottled)
+				shared = true;
 		}
-		if (delta_throttled > ETA * delta_unthrottled)
+		if (shared)
 			System.out.println("SHARED UPLINK BUFFER FOUND\n");
 		else
 			System.out.println("PER SOURCE UPLINK BUFFER FOUND\n");
-
 		clientSocket1.close();
 		clientSocket2.close();
 

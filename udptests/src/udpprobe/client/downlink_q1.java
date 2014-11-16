@@ -8,7 +8,7 @@ import java.net.SocketTimeoutException;
 import java.util.Random;
 
 public class downlink_q1 {
-	final static int NUM_TRIALS = 20;
+	final static int NUM_TRIALS = 30;
 	final static boolean datacollection = true;
 
 	public static void main(String args[]) throws IOException {

@@ -89,6 +89,7 @@ public class downlink_q4b {
 		clientSocket2.close();
 		for (int i = 0; i < 24; i++)
 			System.out.print(dropped[i] + " ");
+		System.out.println();
 
 	}
 
